@@ -1,0 +1,4 @@
+/build/
+/target/
+/audios/
+*.seg
