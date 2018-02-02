@@ -8,20 +8,12 @@ import java.net.Socket;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
-
 import javax.sound.sampled.AudioFileFormat.Type;
 import javax.sound.sampled.AudioFormat;
 import javax.sound.sampled.AudioInputStream;
 import javax.sound.sampled.AudioSystem;
-import javax.sound.sampled.Clip;
-import javax.sound.sampled.FloatControl;
-import javax.sound.sampled.Line;
-import javax.sound.sampled.LineUnavailableException;
-
 import org.json.JSONObject;
 import org.json.JSONTokener;
-
-import br.com.irisbot.asr.TransObj;
 
 
 public class MySocketCli {
@@ -87,12 +79,12 @@ public class MySocketCli {
 			AudioInputStream din = null;
 			AudioFormat baseFormat = in.getFormat();
 			AudioFormat decodedFormat = new AudioFormat(AudioFormat.Encoding.PCM_SIGNED,
-														16000,
-														16,
-														1,
-														2,
-														baseFormat.getSampleRate(),
-														false);
+													16000,
+													16,
+													1,
+													2,
+													baseFormat.getSampleRate(),
+													false);
 			din = AudioSystem.getAudioInputStream(decodedFormat, in);
 			//rawplay(decodedFormat, din);
 			File file_wav = new File("src/br/com/irisbot/asr/core/proper.wav");
@@ -148,9 +140,8 @@ public class MySocketCli {
 					String partialConf  = "";
 					String partialTime  = "";
 			    	
-			    	while (!br.ready()) Thread.sleep(500);
+			    	while (!br.ready()) Thread.sleep(400);
 			    	while((line = br.readLine())!=null && !line.trim().isEmpty()) {
-			    		//System.out.println(line);
 			    		/**
 			    		 * will read line by line
 			    		 */
@@ -168,7 +159,7 @@ public class MySocketCli {
 			    			partialTime = partialTime.replaceAll("(\\D)", "");
 			    		}
 			    		/**
-			    		 * because of that sequence, after all 5 are filled
+			    		 * because of that sequence, after all 3 are filled
 			    		 * we can assume they are about the same transcription
 			    		 */
 			    		if (partialTrans!="" && partialConf!="" && partialTime!="") {

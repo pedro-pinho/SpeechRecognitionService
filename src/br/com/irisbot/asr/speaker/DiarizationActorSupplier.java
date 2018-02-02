@@ -28,7 +28,7 @@ public class DiarizationActorSupplier implements Supplier<String> {
 	private static boolean isOutputClosed = false;
 	private static List<String> params;
 	// private static String fileName = "";
-
+	private static boolean semaphore = true;
 	public DiarizationActorSupplier(ByteArrayOutputStream out, File file, AudioFormat format) {
 		getAudioFile(out, file, format);
 	}
@@ -73,14 +73,23 @@ public class DiarizationActorSupplier implements Supplier<String> {
 	 * @param filename	name of the file that was input
 	 */
 	public void GuessWho(String filename) {
-
-		//TODO change cmd.exe to /bin/sh with flag -c to linux-based systems
-		params = Arrays.asList("cmd.exe", "/C", "go.sh");
-		executeCommand(params, true);
+		if (semaphore) {
+			semaphore=false;
+			new Thread(new Runnable() {
+				@Override
+				public void run() {
+					//TODO change cmd.exe to /bin/sh with flag -c to linux-based systems
+					params = Arrays.asList("cmd.exe", "/C", "go.sh");
+					executeCommand(params, true);
+					
+					//SH before command bellow make response return
+					params = Arrays.asList("cmd.exe", "/C", "sh results.sh " + filename.split("\\.")[0]);
+					response = executeCommand(params, true);
+					semaphore=true;
+				}
+			}).start();
+		}
 		
-		//SH before command bellow make response return
-		params = Arrays.asList("cmd.exe", "/C", "sh results.sh " + filename.split("\\.")[0]);
-		response = executeCommand(params, true);
 		
 	}
 	/**

@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import br.com.irisbot.asr.MapSegmentation;
 import br.com.irisbot.asr.TransObj;
+import br.com.irisbot.utils.similarityStrings;
 
 public class Sync {
 	/**
@@ -41,7 +42,11 @@ public class Sync {
 	}
 	
 	//TODO review when assume things
-	class Chunks {
+	public class Chunks {
+		/**
+		 * Use this to return when everything is done
+		 */
+		private boolean done = false;
 		//Goal: Sync in real time, as more info comes, and optimized
 		//Since we call this every frame (from diarization algorithm), it will execute this a lot of times
 		public Chunks(int frame, long startOfFrame, List<MapSegmentation> ms) {
@@ -71,6 +76,7 @@ public class Sync {
 					if (bestSeg==null) {
 						bestSeg = findNearNeighbour(ms, transObj,startOfFrame);
 					}
+					System.out.println("sync 79");
 					infereLocutor(bestSeg, transObj);
 						
 				}
@@ -106,34 +112,43 @@ public class Sync {
 		public void infereLocutor(MapSegmentation ms, TransObj transObj) {
 			Probability probControl = new Probability();
 			List<Integer> maybe = getPossibilities();
-			
 			/**
 			 * Step 3: Infere which one of the locutors is this
 			 */						
+			System.out.println("sync 118");
 			if (dialogTrace.isEmpty())
 			{
 				//If its the first first, more likely to be agent
 				probControl.increase("agent", new Double(0.3));
-			} else
-			{
+			} else {
+				String s1 = list.get(list.size()-1).getText();
+				String s2 = transObj.getText();
+				if (s1 == s2) {
+					//Se igualzinho, mudar de locutor. Ex: (oi) (oi)
+				} else if (similarityStrings.similarity(s1, s2)>=0.7){
+					//se for só similar, foi do mesmo
+					//Ex: (A vanusa) (A vanusa está) (A vanusa está ai?)
+					increaseProbability(ms.getId(), probControl);
+				} else if(maybe.remove((Integer)ms.getId())) {
+					increaseProbability(maybe.get(0), probControl);
+				}
+				
 				//If the last guy is not equal do this id, it changed middle frame
 				//if (getLastBallOfSpeaking()!=ms.getId())
 				//Here we also assume that the first id identified was from agent
-				if (ms.getId()==maybe.get(0))
-				{
-					probControl.increase("agent", new Double(0.2));
-				}
-				if (ms.getId()==maybe.get(1))
-				{
-					probControl.increase("client", new Double(0.5));
-				}
+				
 				/**
 				 * Step 4: Since it changed
 				 * Cut transcript at that time, make 2 transcriptions 
 				 */
-				//cutTranscription(ms);
+				/**
+				 * Step 1: Find out percentage of frame that was cropped
+				 * Step 2: Use this percentage to cut transcription
+				 * 	Step 2.5: Dont cut words
+				 */
 
 			}
+			System.out.println("winner");
 			if (probControl.getWinner(transObj.getId())=="agent") {
 				transObj.setId(maybe.get(0));
 			} else {
@@ -142,14 +157,16 @@ public class Sync {
 			System.out.println(transObj.getId() + " " +transObj.getText());
 		}
 		
-		public void cutTranscription(MapSegmentation ms) {
-			/**
-			 * Step 1: Find out percentage of frame that was cropped
-			 * Step 2: Use this percentage to cut transcription
-			 * 	Step 2.5: Dont cut words
-			 */
-			//long difference = (ms.getStart()-ms.getLength());
-			
+		public void increaseProbability(Integer id, Probability pc) {
+			List<Integer> maybe = getPossibilities();
+			if (id==maybe.get(0))
+			{
+				pc.increase("agent", new Double(0.2));
+			}
+			if (id==maybe.get(1))
+			{
+				pc.increase("client", new Double(0.5));
+			}
 		}
 		
 		public void addTranscription(TransObj to) {
@@ -165,7 +182,16 @@ public class Sync {
 				probControl.increase("client", new Double(0.2));
 			}
 		}*/
+		public void finished(boolean done) {
+			this.done = done;
+		}
+		
+		public boolean done() {
+			return done;
+		}
 	}
+	
+	
 	/**
 	 * Simulate probability
 	 * Always 0<=x<=1

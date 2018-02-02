@@ -27,8 +27,6 @@ import javax.sound.sampled.AudioInputStream;
 import javax.sound.sampled.AudioSystem;
 import javax.sound.sampled.UnsupportedAudioFileException;
 
-import org.apache.commons.text.similarity.LevenshteinDistance;
-
 import com.google.api.gax.rpc.ApiStreamObserver;
 import com.google.cloud.speech.v1beta1.RecognitionConfig;
 import com.google.cloud.speech.v1beta1.SpeechClient;
@@ -42,6 +40,7 @@ import br.com.irisbot.asr.MapSegmentation;
 import br.com.irisbot.asr.TransObj;
 import br.com.irisbot.asr.core.Sync.Chunks;
 import br.com.irisbot.asr.speaker.DiarizationActorSupplier;
+import br.com.irisbot.utils.similarityStrings;
 /*import fr.lium.deprecated.spkDiarization.*;
 import fr.lium.spkDiarization.libClusteringData.Segment;
 import fr.lium.spkDiarization.programs.Identification;
@@ -261,7 +260,8 @@ public class Stream extends Thread {
 						// send to google
 						requestObserver.onNext(StreamingRecognizeRequest.newBuilder()
 								.setAudioContent(ByteString.copyFrom(buffer)).build());
-
+						Thread.sleep(1000);
+						start -= 1000;
 						/**
 						 * Handle diarization
 						 */
@@ -281,7 +281,6 @@ public class Stream extends Thread {
 							transcription = new TransObj();
 							System.out.println(lastTrans);
 						} else {
-							System.out.println("|");
 							/*System.out.println(transcription.getTrans());
 							System.out.println(transcription.getTime());
 							System.out.println(transcription.getFrame());
@@ -289,7 +288,7 @@ public class Stream extends Thread {
 						}
 						
 						// size 1/5 de um audio de 23 segundos
-						if (false && out.size() > 150000 && !needResetOnOutput && semaphore)
+						if (out.size() > (bufferSize*2) && !needResetOnOutput && semaphore)
 						{
 							frame++;
 							thisFrameStartsAt = System.currentTimeMillis() - start;
@@ -343,9 +342,9 @@ public class Stream extends Thread {
 													    	start 	= Long.parseLong(m.group(1));
 													    	length = Long.parseLong(m.group(2));
 													    	id 	= Integer.parseInt(m.group(3));
-													    	/*System.out.println("Start: " + m.group(1) + 
+													    	System.out.println("Start: " + m.group(1) + 
 													        		", Length: " + m.group(2) + " "+
-													        		", personId:  (" + m.group(3) + ") ");*/
+													        		", personId:  (" + m.group(3) + ") ");
 													    }
 													    if (start>=0 && length>0 && id>=0) {
 													    	ms.add(new MapSegmentation(id, start, length));
@@ -361,6 +360,7 @@ public class Stream extends Thread {
 										}
 										if (!listTranscriptions.isEmpty() && sync!=null) {
 											//segment
+											System.out.println("going chunks");
 											Chunks chnk = sync.new Chunks(frame, thisFrameStartsAt, ms);
 											/*os.write((text.get().toString() + "\n").getBytes());
 											os.flush();*/
@@ -378,20 +378,21 @@ public class Stream extends Thread {
 								}
 							});
 
-						} else {
-							Thread.sleep(600);
 						}
 
 					}
+					//Thread.sleep(2000);
 					// closing output stream, stop new file diarizations
-					DiarizationActorSupplier.setClosed(true);
-					out.close();
+					//DiarizationActorSupplier.setClosed(true);
+					
+					
+					//out.close();
 					//endSession(os);
-					Thread.sleep(300);
-					os.close();
+					
+					//os.close();
 					System.out.println("Encerrando " + srv.getLocalPort());
 
-					srv.close();
+					//srv.close();
 				} catch (SocketTimeoutException e) {
 					e.printStackTrace();
 					return;
@@ -425,7 +426,7 @@ public class Stream extends Thread {
 			transcription.setIsFinal(false);
 		}
 		
-		if (lastTrans!=null && similarity(transcription.getText(), lastTrans)>=0.75) //more than 70% similar to last trans
+		if (lastTrans!=null && similarityStrings.similarity(transcription.getText(), lastTrans)>=0.75) //more than 70% similar to last trans
 			return false;
 		listTranscriptions.add(transcription);
 		return true;
@@ -468,6 +469,7 @@ public class Stream extends Thread {
 		@Override
 		public void onNext(T message) {
 			if (message.toString().indexOf("endpointer_type")>-1) return;
+			System.out.println(message.toString());
 			messages.add(message);
 			this.message = message.toString();			
 		}
@@ -489,25 +491,6 @@ public class Stream extends Thread {
 		public SettableFuture<List<T>> future() {
 			return future;
 		}
-	}
-	
-	/**
-	 * Calculates the similarity (a number within 0 and 1) between two strings.
-	 */
-	public static double similarity(String s1, String s2) {
-		String longer = s1, shorter = s2;
-		if (s1.length() < s2.length()) { // longer should always have greater length
-			longer = s2; shorter = s1;
-		}
-		try {
-			int longerLength = longer.length();
-			if (longerLength == 0) { return 1.0; /* both strings are zero length */ }
-			LevenshteinDistance levenshteinDistance = new LevenshteinDistance();
-		    return (longerLength - levenshteinDistance.apply(longer, shorter)) / (double) longerLength;
-		}catch(Exception e) {
-			e.printStackTrace();
-		}
-		return new Double(1000);
 	}
 	
 }
