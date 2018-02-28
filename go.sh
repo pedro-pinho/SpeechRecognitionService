@@ -3,7 +3,8 @@ outputfolder=./tmp/output
 
 mkdir -p $outputfolder
 #pwd
-
+#echo $PATH
+#cd "C:\Program Files (x86)\Java\jre6\bin"
 for file in $inputfolder/*.wav
 do
  echo "Processing $file"

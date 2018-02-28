@@ -2,10 +2,10 @@ package br.com.irisbot.asr.core;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
@@ -21,7 +21,6 @@ import java.net.ServerSocket;
 import java.net.SocketTimeoutException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
-
 import javax.sound.sampled.AudioFormat;
 import javax.sound.sampled.AudioInputStream;
 import javax.sound.sampled.AudioSystem;
@@ -30,16 +29,16 @@ import javax.sound.sampled.UnsupportedAudioFileException;
 import com.google.api.gax.rpc.ApiStreamObserver;
 import com.google.cloud.speech.v1beta1.RecognitionConfig;
 import com.google.cloud.speech.v1beta1.SpeechClient;
+import com.google.cloud.speech.v1beta1.SpeechRecognitionAlternative;
 import com.google.cloud.speech.v1beta1.StreamingRecognitionConfig;
-import com.google.cloud.speech.v1beta1.StreamingRecognizeRequest;
+import com.google.cloud.speech.v1beta1.StreamingRecognitionResult;
 import com.google.cloud.speech.v1beta1.StreamingRecognizeResponse;
 import com.google.common.util.concurrent.SettableFuture;
-import com.google.protobuf.ByteString;
 
 import br.com.irisbot.asr.MapSegmentation;
 import br.com.irisbot.asr.TransObj;
 import br.com.irisbot.asr.core.Sync.Chunks;
-import br.com.irisbot.asr.speaker.DiarizationActorSupplier;
+import br.com.irisbot.asr.speaker.Diarization;
 import br.com.irisbot.utils.similarityStrings;
 /*import fr.lium.deprecated.spkDiarization.*;
 import fr.lium.spkDiarization.libClusteringData.Segment;
@@ -47,10 +46,6 @@ import fr.lium.spkDiarization.programs.Identification;
 import fr.lium.spkDiarization.programs.MClust;
 import fr.lium.spkDiarization.programs.MSegInit;
 import fr.lium.spkDiarization.tools.Wave2FeatureSet;*/
-
-/**
- * 
- */
 
 /**
  * @author pedro@iris-bot.com.br
@@ -61,7 +56,7 @@ public class Stream extends Thread {
 	/**
 	 * This sends requests to Google
 	 */
-	private ApiStreamObserver<StreamingRecognizeRequest> requestObserver;
+	//private ApiStreamObserver<StreamingRecognizeRequest> requestObserver;
 	/**
 	 * This listens for responses from Google
 	 */
@@ -106,17 +101,27 @@ public class Stream extends Thread {
 	 * Global configs to reset google stream more easily
 	 */
 	private RecognitionConfig recConfig;
-	private StreamingRecognitionConfig config;
 
 	public Stream() {
 		getFormat();
+		/*
 		try {
-			
-			speechClient = SpeechClient.create();
+			SpeechSettings settings = null;
+			SpeechSettings.Builder speechSettingsBuilder =
+				     SpeechSettings.newBuilder();
+			settings = speechSettingsBuilder.build();
+		} catch (IOException e1) {
+			// TODO Auto-generated catch block
+			e1.printStackTrace();
+		}
+		*/
+		
+		try {
+			SpeechClient speechClient = SpeechClient.create();
 			// Configure request with raw PCM audio
 			recConfig = RecognitionConfig.newBuilder().setEncoding(RecognitionConfig.AudioEncoding.LINEAR16)
 					.setLanguageCode("pt-BR").setSampleRate(16000).build();
-			config = StreamingRecognitionConfig.newBuilder().mergeConfig(recConfig)
+			StreamingRecognitionConfig config = StreamingRecognitionConfig.newBuilder().mergeConfig(recConfig)
 					// setInterimResults = partial results come as they are spoken
 					.setInterimResults(true)
 					.build();
@@ -125,9 +130,14 @@ public class Stream extends Thread {
 			resetGoogleStream();
 			
 			new ResetControl();
-			
-		} catch (IOException e) {
+		 }  catch (NoClassDefFoundError e) {
+				// TODO Auto-generated catch block
+			 e.printStackTrace();
+			 return;
+		 }catch (Exception e) {
+			// TODO Auto-generated catch block
 			e.printStackTrace();
+			return;
 		}
 	}
 	
@@ -137,8 +147,8 @@ public class Stream extends Thread {
 	 * On google speech api
 	 */
 	private void resetGoogleStream() {
-		requestObserver = speechClient.streamingRecognizeCallable().bidiStreamingCall(responseObserver);
-		requestObserver.onNext(StreamingRecognizeRequest.newBuilder().setStreamingConfig(config).build());
+		//requestObserver = speechClient.streamingRecognizeCallable().bidiStreamingCall(responseObserver);
+		//requestObserver.onNext(StreamingRecognizeRequest.newBuilder().setStreamingConfig(config).build());
 	}
 	class ResetControl {
 	    private final ScheduledExecutorService scheduler =
@@ -185,6 +195,7 @@ public class Stream extends Thread {
 
 			} catch (Exception e) {
 				e.printStackTrace();
+				return;
 			}
 		}
 	}
@@ -233,7 +244,6 @@ public class Stream extends Thread {
 		Runnable runner = new Runnable() {
 
 			int bufferSize                   = (int) format.getSampleRate() * format.getFrameSize();
-			ExecutorService cachedThreadPool = Executors.newCachedThreadPool();
 			ByteArrayOutputStream out        = new ByteArrayOutputStream();
 			byte buffer[]                    = new byte[bufferSize];
 			String seq                       = null;
@@ -241,176 +251,273 @@ public class Stream extends Thread {
 			int countAc                      = 0;
 			int count                        = 0;
 			long thisFrameStartsAt           = 0;
-			@SuppressWarnings("unused")
 			public void run()
 			{
-				try
+				//for is necessary due to SocketTimeoutException
+				for (int retries = 0; retries < 3; retries++) 
 				{
-					/**
-					 * Count usually reads 32k at time
-					 * last reading usually goes around 24500
-					 * its empty, that's why the threshold is 25k
-					 */
-					while ((count = is.read(buffer, 0, buffer.length)) > 25000)
+					try
 					{
-						if (start==0)
-							start = System.currentTimeMillis();
-						//TODO learn best hyperparam
-						buffer = adjustVolume(buffer, new Float(1.009)); //increase the volum a bit
-						// send to google
-						requestObserver.onNext(StreamingRecognizeRequest.newBuilder()
-								.setAudioContent(ByteString.copyFrom(buffer)).build());
-						Thread.sleep(1000);
-						start -= 1000;
 						/**
-						 * Handle diarization
+						 * Count usually reads 32k at time
+						 * last reading usually goes around 24500
+						 * its empty, that's why the threshold is 25k
 						 */
-						if (needResetOnOutput)
+						while ((count = is.read(buffer, 0, buffer.length)) > 0)
 						{
-							out = new ByteArrayOutputStream();
-							needResetOnOutput = false;
-						}
-						out.write(buffer, 0, buffer.length);
-						countAc += count;
-						//deliver transcriptions if they have all fields
-						if (mountTranscription())
-						{
-							os.write((transcription + "\n").getBytes());
-							os.flush();
-							lastTrans = transcription.getText();
-							transcription = new TransObj();
-							System.out.println(lastTrans);
-						} else {
-							/*System.out.println(transcription.getTrans());
-							System.out.println(transcription.getTime());
-							System.out.println(transcription.getFrame());
-							System.out.println(transcription.getIsFinal());*/
-						}
-						
-						// size 1/5 de um audio de 23 segundos
-						if (out.size() > (bufferSize*2) && !needResetOnOutput && semaphore)
-						{
-							frame++;
-							thisFrameStartsAt = System.currentTimeMillis() - start;
-							semaphore = false;
-							seq       = "000000000000" + countAc;
-							List<MapSegmentation> ms = new ArrayList<MapSegmentation>();
-							//TODO dinamic path
-							temp = new File("C://var/www/SpeechRecognitionService/tmp/input/"
-										+ seq.substring(seq.length() - 12) + ".wav");
-							try {
-								temp.getParentFile().mkdirs();
-							} catch (Exception e) {}
-							
-							CompletableFuture<String> text = CompletableFuture
-									.supplyAsync(new DiarizationActorSupplier(out, temp, format), cachedThreadPool);
-
-							text.whenComplete((result, exception) -> {
-								if (exception != null) {
-									text.completeExceptionally(exception);
-								}
+							if (start==0)
+								start = System.currentTimeMillis();
+							//TODO learn best hyperparam
+							buffer = adjustVolume(buffer, new Float(1.009)); //increase the volum a bit
+							// send to google
+							/*requestObserver.onNext(StreamingRecognizeRequest.newBuilder()
+									.setAudioContent(ByteString.copyFrom(buffer)).build());*/
+							Thread.sleep(1000);
+							start -= 1000;
+							/**
+							 * Handle diarization
+							 */
+							if (needResetOnOutput)
+							{
+								out = new ByteArrayOutputStream();
+								needResetOnOutput = false;
+							}
+							out.write(buffer, 0, buffer.length);
+							countAc += count;
+							//deliver transcriptions if they have all fields
+							/*if (mountTranscription())
+							{
+								System.out.println("transcriptions top: "+transcription.getText());
+								//os.write((transcription.getText() + "\n").getBytes());
+								//os.flush();
+								lastTrans = transcription.getText();
+								transcription = new TransObj();
+							}*/
+							if (((System.currentTimeMillis() - start)>42000) && !needResetOnOutput && semaphore)
+							{
+								frame++;
+								thisFrameStartsAt = System.currentTimeMillis() - start;
+								semaphore = false;
+								seq       = "000000000000" + countAc;
+								final List<MapSegmentation> ms = new ArrayList<MapSegmentation>();
+								//TODO dinamic path
+								
+								temp = new File("C://var/www/SpeechRecognitionService/tmp/input/"
+											+ seq.substring(seq.length() - 12) + ".wav");
+								
 								try {
-									if (text.get().toString() != null)
-									{
-										String segment = text.get().toString();
-										//Maybe this 2 is not proper
-										String clusters[] = new String[2];
-										Sync sync = null;
-										int id = 0;
-										
-										clusters = segment.split("(;; cluster S\\d \\n)");
-										for (String c : clusters)
+									temp.getParentFile().mkdirs();
+								} catch (Exception e) {}
+								
+								ExecutorService executor = Executors.newFixedThreadPool(Math.max(1, Runtime
+									      .getRuntime().availableProcessors() - 1));
+								
+								Future<String> future = executor.submit(new Diarization(out, temp, format));
+								//separar função assync
+								try {
+									String segment = future.get(); // use future
+									try {
+										if (segment != null)
 										{
-											if (c.trim()!="")
-											{
-												//Maybe this 5 is not proper
-												//reflect how many segments are possible per cluster
-												String lines[] = new String[5];
-												long length = 0;
-												long start = 0;
-												lines = c.split(".\n");
-												
-												for (String line : lines)
-												{
-													if (line.trim()!="")
-													{
-														String regex = "^[\\d]{12}\\ [\\d]{1}\\ (\\d+)\\ (\\d+).+S(\\d)";
-													    Pattern p = Pattern.compile(regex);
-													    Matcher m = p.matcher(line.trim());
-													    while (m.find())
-													    {
-													    	start 	= Long.parseLong(m.group(1));
-													    	length = Long.parseLong(m.group(2));
-													    	id 	= Integer.parseInt(m.group(3));
-													    	System.out.println("Start: " + m.group(1) + 
-													        		", Length: " + m.group(2) + " "+
-													        		", personId:  (" + m.group(3) + ") ");
-													    }
-													    if (start>=0 && length>0 && id>=0) {
-													    	ms.add(new MapSegmentation(id, start, length));
-													    	sync = new Sync(listTranscriptions);
-													    	sync.checkAndAddPossibilities(id);
-													    }
-													    	
-													}
-												}
-																								
-											}
+											//Maybe this 2 is not proper
+											String clusters[] = new String[2];
+											Sync sync = null;
+											int id = 0;
 											
+											clusters = segment.split("(;; cluster S\\d \\n)");
+											for (String c : clusters)
+											{
+												if (c.trim()!="")
+												{
+													//Maybe this 5 is not proper
+													//reflect how many segments are possible per cluster
+													String lines[] = new String[5];
+													long length = 0;
+													long start = 0;
+													lines = c.split(".\n");
+													
+													for (String line : lines)
+													{
+														if (line.trim()!="")
+														{
+															String regex = "^[\\d]{12}\\ [\\d]{1}\\ (\\d+)\\ (\\d+).+S(\\d)";
+														    Pattern p = Pattern.compile(regex);
+														    Matcher m = p.matcher(line.trim());
+														    while (m.find())
+														    {
+														    	start 	= Long.parseLong(m.group(1));
+														    	length = Long.parseLong(m.group(2));
+														    	id 	= Integer.parseInt(m.group(3));
+														    	System.out.println("Start: " + m.group(1) + 
+														        		", Length: " + m.group(2) + " "+
+														        		", personId:  (" + m.group(3) + ") ");
+														    }
+														    if (start>=0 && length>0 && id>=0) {
+														    	ms.add(new MapSegmentation(id, start, length));
+														    	sync = new Sync(listTranscriptions);
+														    	sync.checkAndAddPossibilities(id);
+														    }
+														    	
+														}
+													}
+																									
+												}
+												
+											}
+											if (!listTranscriptions.isEmpty() && sync!=null) {
+												//segment
+												System.out.println("going chunks");
+												Chunks chnk = sync.new Chunks(frame, thisFrameStartsAt, ms);
+												List<TransObj> transListComplete = chnk.AnswerToCli();
+												for (TransObj transComplete : transListComplete) {
+													try {
+														System.out.println(transComplete.getId() + " " +transComplete.getText() + "\n");
+														os.write((transComplete.getId() + " " +transComplete.getText() + "\n").getBytes());
+														os.flush();
+													} catch (Exception e) {
+														// TODO Auto-generated catch block
+														e.printStackTrace();
+													}
+													
+												}
+												
+											}
 										}
-										if (!listTranscriptions.isEmpty() && sync!=null) {
-											//segment
-											System.out.println("going chunks");
-											Chunks chnk = sync.new Chunks(frame, thisFrameStartsAt, ms);
-											/*os.write((text.get().toString() + "\n").getBytes());
-											os.flush();*/
+										// reset output to identify next speaker
+										needResetOnOutput = true;
+										semaphore = true;
+									} catch (ArrayIndexOutOfBoundsException e) {
+										e.printStackTrace();
+									}
+									
+									
+									
+								} catch (ExecutionException ex) { 
+									return; 
+								}
+								/*final CompletableFuture<String> text = CompletableFuture
+										.supplyAsync(new DiarizationActorSupplier(out, temp, format), cachedThreadPool);
+	
+								text.whenComplete(new BiConsumer<String, Throwable>() {
+									@Override
+									public void accept(String result, Throwable exception) {
+										if (exception != null) {
+											text.completeExceptionally(exception);
+										}
+										try {
+											if (text.get().toString() != null)
+											{
+												String segment = text.get().toString();
+												//Maybe this 2 is not proper
+												String clusters[] = new String[2];
+												Sync sync = null;
+												int id = 0;
+												
+												clusters = segment.split("(;; cluster S\\d \\n)");
+												for (String c : clusters)
+												{
+													if (c.trim()!="")
+													{
+														//Maybe this 5 is not proper
+														//reflect how many segments are possible per cluster
+														String lines[] = new String[5];
+														long length = 0;
+														long start = 0;
+														lines = c.split(".\n");
+														
+														for (String line : lines)
+														{
+															if (line.trim()!="")
+															{
+																String regex = "^[\\d]{12}\\ [\\d]{1}\\ (\\d+)\\ (\\d+).+S(\\d)";
+															    Pattern p = Pattern.compile(regex);
+															    Matcher m = p.matcher(line.trim());
+															    while (m.find())
+															    {
+															    	start 	= Long.parseLong(m.group(1));
+															    	length = Long.parseLong(m.group(2));
+															    	id 	= Integer.parseInt(m.group(3));
+															    	System.out.println("Start: " + m.group(1) + 
+															        		", Length: " + m.group(2) + " "+
+															        		", personId:  (" + m.group(3) + ") ");
+															    }
+															    if (start>=0 && length>0 && id>=0) {
+															    	ms.add(new MapSegmentation(id, start, length));
+															    	sync = new Sync(listTranscriptions);
+															    	sync.checkAndAddPossibilities(id);
+															    }
+															    	
+															}
+														}
+																										
+													}
+													
+												}
+												if (!listTranscriptions.isEmpty() && sync!=null) {
+													//segment
+													System.out.println("going chunks");
+													Chunks chnk = sync.new Chunks(frame, thisFrameStartsAt, ms);
+													List<TransObj> transListComplete = chnk.AnswerToCli();
+													for (TransObj transComplete : transListComplete) {
+														try {
+															System.out.println(transComplete.getId() + " " +transComplete.getText() + "\n");
+															os.write((transComplete.getId() + " " +transComplete.getText() + "\n").getBytes());
+															os.flush();
+														} catch (Exception e) {
+															// TODO Auto-generated catch block
+															e.printStackTrace();
+														}
+														
+													}
+													
+												}
+											}
+											// reset output to identify next speaker
+											needResetOnOutput = true;
+											semaphore = true;
+										} catch (InterruptedException e) {
+											e.printStackTrace();
+										} catch (ExecutionException e) {
+											e.printStackTrace();
+										} catch (ArrayIndexOutOfBoundsException e) {
+											e.printStackTrace();
 										}
 									}
-									// reset output to identify next speaker
-									needResetOnOutput = true;
-									semaphore = true;
-								} catch (InterruptedException e) {
-									e.printStackTrace();
-								} catch (ExecutionException e) {
-									e.printStackTrace();
-								} catch (ArrayIndexOutOfBoundsException e) {
-									e.printStackTrace();
-								}
-							});
-
+								});*/
+	
+							}
+	
 						}
-
+						// closing output stream, stop new file diarizations
+						//DiarizationActorSupplier.setClosed(true);
+						
+						//out.close();
+						//endSession(os);
+						
+						//os.close();
+						System.out.println("Encerrando " + srv.getLocalPort());
+	
+						srv.close();
+					} catch (SocketTimeoutException e) {
+						e.printStackTrace();
+						//should retry
+					} catch (IOException e) {
+						e.printStackTrace();
+						System.exit(0);
+					} catch (Exception e) {
+						e.printStackTrace();
+						System.exit(0);
 					}
-					//Thread.sleep(2000);
-					// closing output stream, stop new file diarizations
-					//DiarizationActorSupplier.setClosed(true);
-					
-					
-					//out.close();
-					//endSession(os);
-					
-					//os.close();
-					System.out.println("Encerrando " + srv.getLocalPort());
-
-					//srv.close();
-				} catch (SocketTimeoutException e) {
-					e.printStackTrace();
-					return;
-				} catch (IOException e) {
-					e.printStackTrace();
-					return;
-				} catch (Exception e) {
-					e.printStackTrace();
-					return;
 				}
 			} // run
 		}; // runnable
 		Thread captureThread = new Thread(runner);
 		captureThread.start();
 	}
+
 	
 	public synchronized boolean mountTranscription() {
-		String message = responseObserver.catchThis();
+		String message = "";//responseObserver.catchThis();
 		
 		if (message==null || message=="") return false;
 		
@@ -439,12 +546,12 @@ public class Stream extends Thread {
 	 */
 	void endSession(OutputStream os) throws Exception {
 		// Mark transmission as completed after sending the data.
-		requestObserver.onCompleted();
+		/*requestObserver.onCompleted();*/
 		List<StreamingRecognizeResponse> responses = responseObserver.future().get();
 
 		for (StreamingRecognizeResponse response : responses) {
-			for (com.google.cloud.speech.v1beta1.StreamingRecognitionResult result : response.getResultsList()) {
-				for (com.google.cloud.speech.v1beta1.SpeechRecognitionAlternative alternative : result
+			for (StreamingRecognitionResult result : response.getResultsList()) {
+				for (SpeechRecognitionAlternative alternative : result
 						.getAlternativesList()) {
 					String resp = alternative.getTranscript();
 
@@ -466,10 +573,9 @@ public class Stream extends Thread {
 		private final SettableFuture<List<T>> future = SettableFuture.create();
 		private final List<T> messages = new java.util.ArrayList<T>();
 		private String message = "";
-		@Override
+
 		public void onNext(T message) {
 			if (message.toString().indexOf("endpointer_type")>-1) return;
-			System.out.println(message.toString());
 			messages.add(message);
 			this.message = message.toString();			
 		}
@@ -477,12 +583,10 @@ public class Stream extends Thread {
 			return message;
 		}
 
-		@Override
 		public void onError(Throwable t) {
 			future.setException(t);
 		}
 
-		@Override
 		public void onCompleted() {
 			future.set(messages);
 		}

@@ -1,22 +1,11 @@
 package br.com.irisbot.asr.google.speech;
 
 import java.io.File;
-import java.nio.file.Files;
-import java.util.List;
-
-//Imports the Google Cloud client library
-import com.google.cloud.speech.v1.RecognitionAudio;
-import com.google.cloud.speech.v1.RecognitionConfig;
-import com.google.cloud.speech.v1.RecognitionConfig.AudioEncoding;
-import com.google.cloud.speech.v1.RecognizeResponse;
-import com.google.cloud.speech.v1.SpeechClient;
-import com.google.cloud.speech.v1.SpeechRecognitionAlternative;
-import com.google.cloud.speech.v1.SpeechRecognitionResult;
-import com.google.protobuf.ByteString;
 public class GoogleCloudAPI {
   //public static HashMap<String, String> transcriptions = new HashMap<>();
 
-  public static String main(File file) throws Exception  {
+  public static String main(File file)  {
+	return null;/*
 	String trans = "";
 	try {
 		// Instantiates a client
@@ -51,6 +40,6 @@ public class GoogleCloudAPI {
 		e.printStackTrace();
 	}
     return trans.trim();
-  }
+  */}
 
 }

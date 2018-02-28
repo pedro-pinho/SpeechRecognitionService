@@ -3,7 +3,6 @@ package br.com.irisbot.asr.core;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
@@ -77,7 +76,7 @@ public class DetectSilence extends Thread {
 	}
 
 	/*
-	 * TODO: calibrar vari�veis em fun��o separada
+	 * TODO: calibrar variaveis em funcao separada
 	 */
 	public void detectSilenceFromStream(final ServerSocket srv, final InputStream is, final OutputStream os)
 			throws IOException, UnsupportedAudioFileException {
@@ -96,16 +95,16 @@ public class DetectSilence extends Thread {
 				int countAc = 0;
 				int count = 0;
 				try {
-					
-					try{
+
+					try {
 
 						while ((count = is.read(buffer, 0, buffer.length)) > -1) {
 							try {
 								countAc += count;
-	
+
 								File temp = null;
 								String seq = null;
-	
+
 								float level = calculateLevel(buffer, 0, 0);
 								/*
 								 * Iniciou a fala, come�a a grava��o
@@ -114,35 +113,38 @@ public class DetectSilence extends Thread {
 									out = new ByteArrayOutputStream();
 									isSilence = false;
 								}
-								
+
 								if (!isSilence) {
 									seq = "000000000000" + countAc;
-									temp = new File("/tmp/audio/" + seq.substring(seq.length() - 12) + "_" + channel + "_" + callId + ".wav");
-									try{temp.getParentFile().mkdirs();} catch (Exception e) {}
+									temp = new File("/tmp/audio/" + seq.substring(seq.length() - 12) + "_" + channel
+											+ "_" + callId + ".wav");
+									try {
+										temp.getParentFile().mkdirs();
+									} catch (Exception e) {
+									}
 								}
-	
+
 								/*
-								 * Level muito baixo indica que a pessoa parou de
-								 * falar Pega o arquivo, para de gravar
+								 * Level muito baixo indica que a pessoa parou de falar Pega o arquivo, para de
+								 * gravar
 								 */
 								if (level <= 0.04 && !isSilence && temp != null && seq != null) {
 									String resp = getAudioFile(temp, out, seq);
-									if(resp!=null){
-										os.write((resp+"\n").getBytes());
+									if (resp != null) {
+										os.write((resp + "\n").getBytes());
 										os.flush();
 									}
 									isSilence = true;
 								} else {
 									// System.out.print(".");
 								}
-	
+
 								/*
-								 * mesmo silencio (ou fone mutado) o count d� maior
-								 * que 0 s� cai no else quando encerra a liga��o
-								 * mesmo
+								 * mesmo silencio (ou fone mutado) o count d� maior que 0 s� cai no else quando
+								 * encerra a liga��o mesmo
 								 */
 								out.write(buffer, 0, count);
-	
+
 							} catch (Exception e) {
 								e.printStackTrace();
 							}
@@ -152,12 +154,12 @@ public class DetectSilence extends Thread {
 					} catch (Exception e) {
 						e.printStackTrace();
 					}
-					
+
 					os.close();
-					
+
 					System.out.println("Encerrando " + srv.getLocalPort());
 					srv.close();
-					
+
 				} catch (Exception e) {
 					e.printStackTrace();
 				}
@@ -263,18 +265,18 @@ public class DetectSilence extends Thread {
 		try {
 
 			String trans = GoogleCloudAPI.main(file);
-			//String trans1 = AzureSpeechAPI.main(file);
-			
+			// String trans1 = AzureSpeechAPI.main(file);
+
 			// delete file
 			file.delete();
 
-			if(trans.isEmpty()) {
-				System.out.println(file.getName()+" -> empty transcript");
+			if (trans.isEmpty()) {
+				System.out.println(file.getName() + " -> empty transcript");
 				return null;
 			}
-			
+
 			json.addProperty("transcript", trans);
-			//json.addProperty("azure_trans", trans1);
+			// json.addProperty("azure_trans", trans1);
 			json.addProperty("sequence", seq);
 			json.addProperty("call_id", callId);
 			json.addProperty("channel", channel);

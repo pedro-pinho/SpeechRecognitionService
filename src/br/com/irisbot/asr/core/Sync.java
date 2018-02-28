@@ -84,7 +84,9 @@ public class Sync {
 				e.printStackTrace();
 			}
 			
-			
+		}
+		public List<TransObj> AnswerToCli() {
+			return list;
 		}
 		/**
 		 * We didn't got exact match, so find nearest neighbour
@@ -148,13 +150,12 @@ public class Sync {
 				 */
 
 			}
-			System.out.println("winner");
 			if (probControl.getWinner(transObj.getId())=="agent") {
 				transObj.setId(maybe.get(0));
 			} else {
 				transObj.setId(maybe.get(1));
 			}
-			System.out.println(transObj.getId() + " " +transObj.getText());
+			
 		}
 		
 		public void increaseProbability(Integer id, Probability pc) {

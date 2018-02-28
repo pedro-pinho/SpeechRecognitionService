@@ -8,9 +8,6 @@ import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-
-import com.google.gson.JsonObject;
-
 /**
  * Servlet implementation class orchestrator
  */
@@ -19,7 +16,7 @@ public class orchestrator extends HttpServlet {
 	private static final long serialVersionUID = 1L;
        
 
-	private static final HashMap<Integer, String> FILA = new HashMap<>();
+	private static final HashMap<Integer, String> FILA = new HashMap<Integer, String>();
 	
 	public orchestrator() {
         super();
@@ -42,15 +39,13 @@ public class orchestrator extends HttpServlet {
 		return FILA.get(key);
 	}
 
-	protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-		JsonObject PORTAS = new JsonObject();
+	protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException, NoClassDefFoundError {
 		String codigo = request.getParameter("cod");
 		if(codigo==null) {
 			response.getWriter().append("campo COD esta vazio");
 			return;
 		}
-		
-		
+		Integer[] portas = new Integer[4];
 		for (int i = 0; i<500; i++) {
 			if (FILA.get(i) == null ) {
 				FILA.put(i, codigo);
@@ -58,17 +53,16 @@ public class orchestrator extends HttpServlet {
 				 * porta_agente = 9000 + idporta
 				 * porta_cliente = 9500 + idporta
 				 */
-				PORTAS.addProperty("porta", 9000+i);
-				//PORTAS.addProperty("porta_cliente", 9500+i);
-				
-				SocketListener.instance(i);
+				portas[i] = 9000+i;
+				System.out.println(portas[i]);
+				SocketListener.main(portas[i]);
 				//SocketListener.instance(500+i);
 				
 				break;
 			}
 		}
 		response.addHeader("Content-type", "application/json");
-		response.getWriter().append(PORTAS.toString());
+		response.getWriter().append(portas.toString());
 	}
 	
 

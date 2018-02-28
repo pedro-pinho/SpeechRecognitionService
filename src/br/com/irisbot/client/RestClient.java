@@ -10,13 +10,14 @@ import java.net.HttpURLConnection;
 import java.net.PasswordAuthentication;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Scanner;
 
 import javax.net.ssl.HttpsURLConnection;
+
+import com.google.common.io.Files;
 
 
 /**
@@ -95,8 +96,7 @@ public abstract class RestClient{
         new Thread( 
         	new Runnable() {
             Response response = new Response();
-            @SuppressWarnings("resource")
-			@Override
+            @SuppressWarnings({ "resource", "deprecation" })
             public void run() {
                 HttpURLConnection conn;
                 try {
@@ -125,7 +125,7 @@ public abstract class RestClient{
                         	dos.writeBytes("Content-Disposition: form-data; name=\"" +
                         		    attachField + "\";filename=\"" + 
                         		    attachment.getName() + "\"" + crlf + crlf);
-                        	dos.write(Files.readAllBytes(attachment.toPath()));
+                        	dos.write((Integer) Files.readBytes(new File(attachment.getPath()), null));
                         	dos.writeBytes(crlf + twoHyphens + boundary + twoHyphens + crlf);
                         }
                         out.flush();

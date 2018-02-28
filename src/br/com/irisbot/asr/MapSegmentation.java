@@ -1,6 +1,5 @@
 package br.com.irisbot.asr;
 
-import java.util.List;
 
 public class MapSegmentation {
 	private Integer id;

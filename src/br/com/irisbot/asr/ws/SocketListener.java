@@ -8,24 +8,20 @@ import java.net.Socket;
 import br.com.irisbot.asr.core.Stream;
 
 public class SocketListener {
-	
-	
-	public static void instance(final int key) {
-		
+	public static void main(final int port) {
 		new Thread(new Runnable() {
 			@Override
 			public void run() {
 				try {
 					//String callId = orchestrator.getCallId(key>=500?key-500:key);
 					
-					ServerSocket srv = new ServerSocket(9000+key);
+					ServerSocket srv = new ServerSocket(port);
 					srv.setSoTimeout(30000);
 
 					System.out.println("aguardando..."+srv.getLocalPort());
 					
 					Socket cli = srv.accept();
 					cli.setSoTimeout(6000);
-					
 					System.out.println("aceito.."+srv.getLocalPort());
 					
 					InputStream is = cli.getInputStream();
@@ -34,7 +30,7 @@ public class SocketListener {
 					Stream ds = new Stream();
 					ds.speechStreamingGoogle(srv,is,os);
 					
-					orchestrator.releasePort(key);
+					//orchestrator.releasePort(key);
 					
 				}catch (Throwable e) {
 					e.printStackTrace();
@@ -42,5 +38,13 @@ public class SocketListener {
 			}
 		}).start();
 	}
+	 /*private static Integer findRandomOpenPortOnAllLocalInterfaces() throws IOException {
+	    try (
+	        ServerSocket socket = new ServerSocket(0);
+	    ) {
+	      return socket.getLocalPort();
+
+	    }
+	  }*/
 
 }
